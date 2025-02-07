@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'nyt' => [
+        'api_key' => env('NYT_API_KEY', ''),
+        'base_url' => 'https://api.nytimes.com/svc',
+        'test_mode' => env('NYT_TEST_CLIENT', false),
+    ],
+
 ];

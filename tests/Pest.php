@@ -11,37 +11,97 @@
 |
 */
 
+use App\Contracts\BestSellersClientContract;
+use App\Models\User;
+use App\Rules\IsbnRule;
+use App\Services\BestSellersService;
+use Illuminate\Support\Facades\Http;
+
 pest()->extend(Tests\TestCase::class)
- // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
     ->in('Feature');
 
-/*
-|--------------------------------------------------------------------------
-| Expectations
-|--------------------------------------------------------------------------
-|
-| When you're writing tests, you often need to check that values meet certain conditions. The
-| "expect()" function gives you access to a set of "expectations" methods that you can use
-| to assert different things. Of course, you may extend the Expectation API at any time.
-|
-*/
+pest()->use(Tests\TestCase::class)->in('Unit');
 
-expect()->extend('toBeOne', function () {
-    return $this->toBe(1);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Functions
-|--------------------------------------------------------------------------
-|
-| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
-| project that you don't want to repeat in every file. Here you can also expose helpers as
-| global functions to help you to reduce the number of lines of code in your test files.
-|
-*/
-
-function something()
+function disableNytTestMode(): void
 {
-    // ..
+    config(['services.nyt.test_mode' => false]);
+}
+
+function enableNytTestMode(): void
+{
+    config(['services.nyt.test_mode' => true]);
+}
+
+function fakeBestSellersData(): void
+{
+    Http::fake([
+        'api.nytimes.com/*' => Http::response([
+            'status' => 'OK',
+            'results' => [['title' => 'Book 1']],
+        ], 200),
+    ]);
+}
+
+function fakeErrorResponse($code = 500): void
+{
+    Http::fake([
+        'api.nytimes.com/*' => Http::response(null, $code),
+    ]);
+}
+
+function getDummyEndpointResponseData(): array
+{
+    return [
+        'status' => 'OK',
+        'results' => [
+            ['title' => fake()->sentence(3)],
+        ],
+    ];
+}
+
+function getDummyBestSellersClient(array $dummyData): BestSellersClientContract
+{
+    return new class($dummyData) implements BestSellersClientContract
+    {
+        private $dummyData;
+
+        public function __construct($dummyData)
+        {
+            $this->dummyData = $dummyData;
+        }
+
+        public function getBestSellers(array $params): array
+        {
+            return $this->dummyData;
+        }
+    };
+}
+
+function getBestSellersService(array $dummyData): BestSellersService
+{
+    return new BestSellersService(getDummyBestSellersClient($dummyData));
+}
+
+function getEndpointUrl($query = []): string
+{
+    return '/api/v1/best-sellers?'.http_build_query($query);
+}
+
+function getTestUser(): User
+{
+    return User::factory()->create();
+}
+
+function validateIsbn(string $isbn, bool $valid): void
+{
+    $rule = new IsbnRule;
+
+    $failCalled = false;
+    $fail = function ($message) use (&$failCalled) {
+        $failCalled = true;
+    };
+
+    $rule->validate('isbn', $isbn, $fail);
+    expect($failCalled)->toBe(! $valid);
 }
